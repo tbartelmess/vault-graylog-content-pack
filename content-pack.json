@@ -1,0 +1,203 @@
+{
+  "name": "Hashicorp Vault",
+  "description": "A minimal content pack to parse Hashicorp's [Vault](https://vaultproject.io) Audit logs.\n\nThe content-pack sets up a TCP listener on port 5553. To send Vault audit logs to Graylog, use the 'Socket' audit backend.\n\n```\nvault audit-enable socket address YOUR_GRAYLOG_HOST:5553\n```",
+  "category": "Security",
+  "inputs": [
+    {
+      "id": "58bcc52bbd174c6373fde6ef",
+      "title": "Vault",
+      "configuration": {
+        "recv_buffer_size": 1048576,
+        "tcp_keepalive": false,
+        "use_null_delimiter": false,
+        "tls_client_auth_cert_file": "",
+        "bind_address": "0.0.0.0",
+        "tls_cert_file": "",
+        "port": 5553,
+        "tls_key_file": "",
+        "tls_enable": false,
+        "tls_key_password": "",
+        "max_message_size": 2097152,
+        "tls_client_auth": "disabled",
+        "override_source": null
+      },
+      "static_fields": {},
+      "type": "org.graylog2.inputs.raw.tcp.RawTCPInput",
+      "global": false,
+      "extractors": [
+        {
+          "title": "Parse JSON",
+          "type": "JSON",
+          "cursor_strategy": "CUT",
+          "target_field": "",
+          "source_field": "message",
+          "configuration": {
+            "list_separator": ", ",
+            "kv_separator": "=",
+            "key_prefix": "vault_",
+            "key_separator": "_",
+            "replace_key_whitespace": false,
+            "key_whitespace_replacement": "_"
+          },
+          "converters": [],
+          "condition_type": "NONE",
+          "condition_value": "",
+          "order": 0
+        },
+        {
+          "title": "Extracts the resource path",
+          "type": "REGEX",
+          "cursor_strategy": "COPY",
+          "target_field": "vault_path",
+          "source_field": "vault_request_path",
+          "configuration": {
+            "regex_value": "^[^\\/]+[^\\/]+\\/(.*)"
+          },
+          "converters": [],
+          "condition_type": "NONE",
+          "condition_value": "",
+          "order": 0
+        },
+        {
+          "title": "Authentication Backend",
+          "type": "REGEX",
+          "cursor_strategy": "COPY",
+          "target_field": "vault_authentication_backend",
+          "source_field": "vault_request_path",
+          "configuration": {
+            "regex_value": "^auth/([^\\/]+)"
+          },
+          "converters": [],
+          "condition_type": "REGEX",
+          "condition_value": "^auth/",
+          "order": 0
+        },
+        {
+          "title": "Vault Secret Backend",
+          "type": "REGEX",
+          "cursor_strategy": "COPY",
+          "target_field": "vault_mount",
+          "source_field": "vault_request_path",
+          "configuration": {
+            "regex_value": "^([^\\/]+)"
+          },
+          "converters": [],
+          "condition_type": "REGEX",
+          "condition_value": "^(?!sys|auth)",
+          "order": 0
+        }
+      ]
+    }
+  ],
+  "streams": [
+    {
+      "id": "58c21bd7bd174c0428238a6c",
+      "title": "Vault Secrets",
+      "description": "All successful reads to Vault Secrets",
+      "disabled": false,
+      "matching_type": "AND",
+      "stream_rules": [
+        {
+          "type": "PRESENCE",
+          "field": "vault_mount",
+          "value": "",
+          "inverted": false,
+          "description": ""
+        },
+        {
+          "type": "EXACT",
+          "field": "vault_type",
+          "value": "response",
+          "inverted": false,
+          "description": ""
+        },
+        {
+          "type": "EXACT",
+          "field": "vault_request_operation",
+          "value": "read",
+          "inverted": true,
+          "description": ""
+        }
+      ],
+      "outputs": [],
+      "default_stream": false
+    },
+    {
+      "id": "58c21dc1bd174c0428238c77",
+      "title": "Vault Secret Access",
+      "description": "Successful read operations from Vault",
+      "disabled": false,
+      "matching_type": "AND",
+      "stream_rules": [
+        {
+          "type": "PRESENCE",
+          "field": "vault_mount",
+          "value": "",
+          "inverted": true,
+          "description": ""
+        },
+        {
+          "type": "EXACT",
+          "field": "vault_type",
+          "value": "response",
+          "inverted": false,
+          "description": ""
+        },
+        {
+          "type": "EXACT",
+          "field": "vault_request_operation",
+          "value": "read",
+          "inverted": false,
+          "description": ""
+        }
+      ],
+      "outputs": [],
+      "default_stream": false
+    },
+    {
+      "id": "000000000000000000000001",
+      "title": "All messages",
+      "description": "Stream containing all messages",
+      "disabled": false,
+      "matching_type": "AND",
+      "stream_rules": [],
+      "outputs": [],
+      "default_stream": true
+    },
+    {
+      "id": "58bccec5bd174c66238c34ed",
+      "title": "Vault Authentications",
+      "description": "All Vault authentications",
+      "disabled": false,
+      "matching_type": "OR",
+      "stream_rules": [
+        {
+          "type": "EXACT",
+          "field": "vault_type",
+          "value": "response",
+          "inverted": false,
+          "description": ""
+        },
+        {
+          "type": "PRESENCE",
+          "field": "vault_authentication_backend",
+          "value": "",
+          "inverted": false,
+          "description": ""
+        },
+        {
+          "type": "EXACT",
+          "field": "request_path",
+          "value": "token/lookup-self",
+          "inverted": true,
+          "description": "Excluding requests to token/lookup-self. The lookup-self endpoint is used to retrieve information about the current token, and doesn't create/renew anything."
+        }
+      ],
+      "outputs": [],
+      "default_stream": false
+    }
+  ],
+  "outputs": [],
+  "dashboards": [],
+  "grok_patterns": []
+}
