@@ -1,203 +1,612 @@
 {
-  "name": "Hashicorp Vault",
-  "description": "A minimal content pack to parse Hashicorp's [Vault](https://vaultproject.io) Audit logs.\n\nThe content-pack sets up a TCP listener on port 5553. To send Vault audit logs to Graylog, use the 'Socket' audit backend.\n\n```\nvault audit-enable socket address YOUR_GRAYLOG_HOST:5553\n```",
-  "category": "Security",
-  "inputs": [
+  "v": 1,
+  "id": "945a8b5d-6a8b-4e6e-b445-fef6ec5f782b",
+  "rev": 1,
+  "name": "Vault",
+  "summary": "Message Parsing for Messages from HashiCorp Vault",
+  "description": "This content pack adds a TCP input and pipeline to process audit logs from [HashiCorp Vault](https://www.vaultproject.io).\n\nThe Input works with the [TCP socket audit device](https://www.vaultproject.io/docs/audit/socket) in Vault. Vault currently doesn't support TLS connections for the Audit backend, so if the confidentiality of audit logs is important to your use case, you use should ensure that the connection is secured between Graylog and Vault.\n\nThe content pack includes a basic dashboard showing all successful and failed requests for vault.",
+  "vendor": "Thomas Bartelmess <thomas@bartelmess.io>",
+  "url": "https://github.com/tbartelmess/vault-graylog-content-pack/",
+  "parameters": [],
+  "entities": [
     {
-      "id": "58bcc52bbd174c6373fde6ef",
-      "title": "Vault",
-      "configuration": {
-        "recv_buffer_size": 1048576,
-        "tcp_keepalive": false,
-        "use_null_delimiter": false,
-        "tls_client_auth_cert_file": "",
-        "bind_address": "0.0.0.0",
-        "tls_cert_file": "",
-        "port": 5553,
-        "tls_key_file": "",
-        "tls_enable": false,
-        "tls_key_password": "",
-        "max_message_size": 2097152,
-        "tls_client_auth": "disabled",
-        "override_source": null
+      "v": "1",
+      "type": {
+        "name": "pipeline_rule",
+        "version": "1"
       },
-      "static_fields": {},
-      "type": "org.graylog2.inputs.raw.tcp.RawTCPInput",
-      "global": false,
-      "extractors": [
-        {
-          "title": "Parse JSON",
-          "type": "JSON",
-          "cursor_strategy": "CUT",
-          "target_field": "",
-          "source_field": "message",
-          "configuration": {
-            "list_separator": ", ",
-            "kv_separator": "=",
-            "key_prefix": "vault_",
-            "key_separator": "_",
-            "replace_key_whitespace": false,
-            "key_whitespace_replacement": "_"
-          },
-          "converters": [],
-          "condition_type": "NONE",
-          "condition_value": "",
-          "order": 0
+      "id": "34763718-60a7-4a30-ba2f-fe28f83c7cf6",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "extract json from field message"
         },
-        {
-          "title": "Extracts the resource path",
-          "type": "REGEX",
-          "cursor_strategy": "COPY",
-          "target_field": "vault_path",
-          "source_field": "vault_request_path",
-          "configuration": {
-            "regex_value": "^[^\\/]+[^\\/]+\\/(.*)"
-          },
-          "converters": [],
-          "condition_type": "NONE",
-          "condition_value": "",
-          "order": 0
+        "description": {
+          "@type": "string",
+          "@value": ""
         },
+        "source": {
+          "@type": "string",
+          "@value": "rule \"extract json from field message\"\nwhen\n is_json(parse_json(to_string($message.message))) == true\nthen\n    let json = parse_json(to_string($message.message));\n    let new_fields = select_jsonpath(json,\n    {\n        vault_message_type: \"$['type']\"\n    });\n    \n    set_fields(new_fields);\n    let date_string = to_string(select_jsonpath(json,{time: \"$['time']\"})[\"time\"]);\n    let time =  parse_date(date_string, \"yyyy-MM-dd'T'HH:mm:ss.SSSSSSS'Z'\");\n    set_field(\"timestamp\", time);\n\nend"
+        }
+      },
+      "constraints": [
         {
-          "title": "Authentication Backend",
-          "type": "REGEX",
-          "cursor_strategy": "COPY",
-          "target_field": "vault_authentication_backend",
-          "source_field": "vault_request_path",
-          "configuration": {
-            "regex_value": "^auth/([^\\/]+)"
-          },
-          "converters": [],
-          "condition_type": "REGEX",
-          "condition_value": "^auth/",
-          "order": 0
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "pipeline_rule",
+        "version": "1"
+      },
+      "id": "d5d5bec7-29bc-4e11-8871-b7f59fd8d831",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "store message in vault stream"
         },
+        "description": {
+          "@type": "string",
+          "@value": ""
+        },
+        "source": {
+          "@type": "string",
+          "@value": "rule \"store message in vault stream\"\nwhen true\nthen\nroute_to_stream(\"Vault Audit Logs\");\nend"
+        }
+      },
+      "constraints": [
         {
-          "title": "Vault Secret Backend",
-          "type": "REGEX",
-          "cursor_strategy": "COPY",
-          "target_field": "vault_mount",
-          "source_field": "vault_request_path",
-          "configuration": {
-            "regex_value": "^([^\\/]+)"
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "input",
+        "version": "1"
+      },
+      "id": "8bc4955a-164a-40df-879a-56e83b57ec50",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "Vault"
+        },
+        "configuration": {
+          "tls_key_file": {
+            "@type": "string",
+            "@value": ""
           },
-          "converters": [],
-          "condition_type": "REGEX",
-          "condition_value": "^(?!sys|auth)",
-          "order": 0
+          "port": {
+            "@type": "integer",
+            "@value": 1234
+          },
+          "tls_enable": {
+            "@type": "boolean",
+            "@value": false
+          },
+          "use_null_delimiter": {
+            "@type": "boolean",
+            "@value": false
+          },
+          "recv_buffer_size": {
+            "@type": "integer",
+            "@value": 1048576
+          },
+          "tcp_keepalive": {
+            "@type": "boolean",
+            "@value": false
+          },
+          "tls_client_auth_cert_file": {
+            "@type": "string",
+            "@value": ""
+          },
+          "bind_address": {
+            "@type": "string",
+            "@value": "0.0.0.0"
+          },
+          "tls_cert_file": {
+            "@type": "string",
+            "@value": ""
+          },
+          "max_message_size": {
+            "@type": "integer",
+            "@value": 2097152
+          },
+          "tls_client_auth": {
+            "@type": "string",
+            "@value": "disabled"
+          },
+          "number_worker_threads": {
+            "@type": "integer",
+            "@value": 6
+          },
+          "tls_key_password": {
+            "@type": "string",
+            "@value": ""
+          }
+        },
+        "static_fields": {
+          "application": {
+            "@type": "string",
+            "@value": "vault"
+          }
+        },
+        "type": {
+          "@type": "string",
+          "@value": "org.graylog2.inputs.raw.tcp.RawTCPInput"
+        },
+        "global": {
+          "@type": "boolean",
+          "@value": false
+        },
+        "extractors": []
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "stream",
+        "version": "1"
+      },
+      "id": "d1516f8a-bea1-4b75-8084-264fcefe61a5",
+      "data": {
+        "alarm_callbacks": [],
+        "outputs": [],
+        "remove_matches": {
+          "@type": "boolean",
+          "@value": false
+        },
+        "title": {
+          "@type": "string",
+          "@value": "Vault Audit Logs"
+        },
+        "stream_rules": [],
+        "alert_conditions": [],
+        "matching_type": {
+          "@type": "string",
+          "@value": "AND"
+        },
+        "disabled": {
+          "@type": "boolean",
+          "@value": false
+        },
+        "description": {
+          "@type": "string",
+          "@value": "Vault Audit Logs"
+        },
+        "default_stream": {
+          "@type": "boolean",
+          "@value": false
+        }
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "pipeline_rule",
+        "version": "1"
+      },
+      "id": "a3241565-bde4-469c-9cc9-f08eb40bbacc",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "process vault responses"
+        },
+        "description": {
+          "@type": "string",
+          "@value": "Process Vault Response"
+        },
+        "source": {
+          "@type": "string",
+          "@value": "rule \"process vault responses\"\nwhen\n has_field(\"vault_message_type\") && $message.vault_message_type == \"response\"\nthen\n let json = parse_json(to_string($message.message));\n let new_fields = select_jsonpath(json,\n    {\n        vault_operation: \"$['request']['operation']\",\n        vault_path: \"$['request']['path']\",\n        vault_namespace: \"$['request']['namespace']['id']\"\n        vault_request_id: \"$['request']['id']\"\n        vault_request_address: \"$['request']['remote_address']\",\n        vault_auth_client_token: \"$['auth']['client_token']\"\n        vault_auth_display_name: \"$['auth']['display_name']\"\n        vault_auth_policies: \"$['auth']['policies']\",\n        vault_auth_token_policies: \"$['auth']['token_policies']\",\n        vault_auth_token_type: \"$['auth']['token_type']\",\n        vault_token_issue_time: \"$['auth']['token_issue_time']\"\n    });\n    set_fields(new_fields);\nend\n\nend"
+        }
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "stream",
+        "version": "1"
+      },
+      "id": "de36f3f9-40a1-4fdc-9479-29d880344288",
+      "data": {
+        "alarm_callbacks": [],
+        "outputs": [],
+        "remove_matches": {
+          "@type": "boolean",
+          "@value": false
+        },
+        "title": {
+          "@type": "string",
+          "@value": "Vault Messages"
+        },
+        "stream_rules": [
+          {
+            "type": {
+              "@type": "string",
+              "@value": "EXACT"
+            },
+            "field": {
+              "@type": "string",
+              "@value": "application"
+            },
+            "value": {
+              "@type": "string",
+              "@value": "vault"
+            },
+            "inverted": {
+              "@type": "boolean",
+              "@value": false
+            },
+            "description": {
+              "@type": "string",
+              "@value": ""
+            }
+          }
+        ],
+        "alert_conditions": [],
+        "matching_type": {
+          "@type": "string",
+          "@value": "AND"
+        },
+        "disabled": {
+          "@type": "boolean",
+          "@value": false
+        },
+        "description": {
+          "@type": "string",
+          "@value": "All Vault Messages"
+        },
+        "default_stream": {
+          "@type": "boolean",
+          "@value": false
+        }
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "pipeline_rule",
+        "version": "1"
+      },
+      "id": "49a78e84-abcb-4384-9b77-f35ea78aadfa",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "drop vault requests"
+        },
+        "description": {
+          "@type": "string",
+          "@value": "Drop Requests"
+        },
+        "source": {
+          "@type": "string",
+          "@value": "rule \"drop vault requests\"\nwhen\n    has_field(\"vault_message_type\") && $message.vault_message_type == \"request\"\nthen\n    drop_message();\n    remove_from_stream();\nend"
+        }
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "pipeline",
+        "version": "1"
+      },
+      "id": "b9c1fd89-5783-4854-9b89-3be98f752514",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "Vault Pipeline"
+        },
+        "description": {
+          "@type": "string",
+          "@value": "Pipeline to Parse Vault Audit Logs"
+        },
+        "source": {
+          "@type": "string",
+          "@value": "pipeline \"Vault Pipeline\"\nstage 0 match all\nrule \"extract json from field message\"\nstage 1 match either\nrule \"process vault responses\"\nrule \"drop vault requests\"\nrule \"parse vault errors\"\nstage 2 match either\nrule \"store message in vault stream\"\nend"
+        },
+        "connected_streams": [
+          {
+            "@type": "string",
+            "@value": "de36f3f9-40a1-4fdc-9479-29d880344288"
+          }
+        ]
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "pipeline_rule",
+        "version": "1"
+      },
+      "id": "d59ffbe3-23f0-4bf7-9d67-bdf944babed0",
+      "data": {
+        "title": {
+          "@type": "string",
+          "@value": "parse vault errors"
+        },
+        "description": {
+          "@type": "string",
+          "@value": "Parse Vault Errors"
+        },
+        "source": {
+          "@type": "string",
+          "@value": "rule \"parse vault errors\"\nwhen\n is_not_null(select_jsonpath(parse_json(to_string($message.message)), {error: \"$['error']\"})[\"error\"])\n then\n let error = select_jsonpath(parse_json(to_string($message.message)), {error: \"$['error']\"})[\"error\"];\n let error_strip = regex_replace(\"[^:]+:(.*)\", to_string(error), \"\");\n    set_field(\"error\", error_strip);\n    set_field(\"result\", \"error\");\n end\n \nrule \"set no error\"\nwhen\n is_null(select_jsonpath(parse_json(to_string($message.message)), {error: \"$['error']\"}))\n then\n    set_field(\"result\", \"success\");\n end"
+        }
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
+        }
+      ]
+    },
+    {
+      "v": "1",
+      "type": {
+        "name": "dashboard",
+        "version": "2"
+      },
+      "id": "8f0b646a-ad6a-4b68-9599-f1f9bd379217",
+      "data": {
+        "summary": {
+          "@type": "string",
+          "@value": ""
+        },
+        "search": {
+          "queries": [
+            {
+              "id": "d02ef2cc-04ee-4f9c-ad8d-4c6b24028815",
+              "timerange": {
+                "type": "relative",
+                "range": 300
+              },
+              "query": {
+                "type": "elasticsearch",
+                "query_string": ""
+              },
+              "search_types": [
+                {
+                  "query": {
+                    "type": "elasticsearch",
+                    "query_string": ""
+                  },
+                  "name": "chart",
+                  "timerange": {
+                    "type": "relative",
+                    "range": 300
+                  },
+                  "streams": [
+                    "d1516f8a-bea1-4b75-8084-264fcefe61a5"
+                  ],
+                  "series": [
+                    {
+                      "type": "count",
+                      "id": "count()",
+                      "field": null
+                    }
+                  ],
+                  "filter": null,
+                  "rollup": true,
+                  "row_groups": [
+                    {
+                      "type": "values",
+                      "field": "vault_path",
+                      "limit": 15
+                    }
+                  ],
+                  "type": "pivot",
+                  "id": "1c1401e8-ce7f-461b-97ec-efac68405df7",
+                  "column_groups": [],
+                  "sort": []
+                },
+                {
+                  "query": {
+                    "type": "elasticsearch",
+                    "query_string": ""
+                  },
+                  "name": null,
+                  "timerange": {
+                    "type": "relative",
+                    "range": 300
+                  },
+                  "offset": 0,
+                  "streams": [
+                    "d1516f8a-bea1-4b75-8084-264fcefe61a5"
+                  ],
+                  "filter": null,
+                  "decorators": [],
+                  "type": "messages",
+                  "id": "7f6f1c87-e162-4156-be73-4e30fde6733c",
+                  "limit": 150
+                }
+              ]
+            }
+          ],
+          "parameters": [],
+          "requires": {},
+          "owner": "admin",
+          "created_at": "2020-11-22T01:09:39.195Z"
+        },
+        "created_at": "2020-11-21T23:17:24.913Z",
+        "requires": {},
+        "state": {
+          "d02ef2cc-04ee-4f9c-ad8d-4c6b24028815": {
+            "selected_fields": null,
+            "static_message_list_id": null,
+            "titles": {
+              "widget": {
+                "e3402187-eabc-4542-957d-1a591a2279c2": "Vault Access",
+                "f2ad8e4e-a72a-47e2-80ee-d2c0a0988f41": "Top Paths"
+              }
+            },
+            "widgets": [
+              {
+                "id": "e3402187-eabc-4542-957d-1a591a2279c2",
+                "type": "messages",
+                "filter": null,
+                "timerange": {
+                  "type": "relative",
+                  "range": 300
+                },
+                "query": {
+                  "type": "elasticsearch",
+                  "query_string": ""
+                },
+                "streams": [
+                  "d1516f8a-bea1-4b75-8084-264fcefe61a5"
+                ],
+                "config": {
+                  "fields": [
+                    "timestamp",
+                    "vault_path",
+                    "vault_operation",
+                    "vault_auth_display_name"
+                  ],
+                  "show_message_row": false,
+                  "decorators": [],
+                  "sort": [
+                    {
+                      "type": "pivot",
+                      "field": "timestamp",
+                      "direction": "Descending"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "f2ad8e4e-a72a-47e2-80ee-d2c0a0988f41",
+                "type": "aggregation",
+                "filter": null,
+                "timerange": {
+                  "type": "relative",
+                  "range": 300
+                },
+                "query": {
+                  "type": "elasticsearch",
+                  "query_string": ""
+                },
+                "streams": [
+                  "d1516f8a-bea1-4b75-8084-264fcefe61a5"
+                ],
+                "config": {
+                  "visualization": "table",
+                  "event_annotation": false,
+                  "row_pivots": [
+                    {
+                      "field": "vault_path",
+                      "type": "values",
+                      "config": {
+                        "limit": 15
+                      }
+                    }
+                  ],
+                  "series": [
+                    {
+                      "config": {
+                        "name": null
+                      },
+                      "function": "count()"
+                    }
+                  ],
+                  "rollup": true,
+                  "column_pivots": [],
+                  "visualization_config": null,
+                  "formatting_settings": null,
+                  "sort": []
+                }
+              }
+            ],
+            "widget_mapping": {
+              "e3402187-eabc-4542-957d-1a591a2279c2": [
+                "7f6f1c87-e162-4156-be73-4e30fde6733c"
+              ],
+              "f2ad8e4e-a72a-47e2-80ee-d2c0a0988f41": [
+                "1c1401e8-ce7f-461b-97ec-efac68405df7"
+              ]
+            },
+            "positions": {
+              "f2ad8e4e-a72a-47e2-80ee-d2c0a0988f41": {
+                "col": 6,
+                "row": 1,
+                "height": 5,
+                "width": 3
+              },
+              "e3402187-eabc-4542-957d-1a591a2279c2": {
+                "col": 1,
+                "row": 1,
+                "height": 5,
+                "width": 5
+              }
+            },
+            "formatting": {
+              "highlighting": []
+            },
+            "display_mode_settings": {
+              "positions": {}
+            }
+          }
+        },
+        "properties": [],
+        "owner": "admin",
+        "title": {
+          "@type": "string",
+          "@value": "Vault Overview"
+        },
+        "type": "DASHBOARD",
+        "description": {
+          "@type": "string",
+          "@value": ""
+        }
+      },
+      "constraints": [
+        {
+          "type": "server-version",
+          "version": ">=3.3.8+e223f85"
         }
       ]
     }
-  ],
-  "streams": [
-    {
-      "id": "58c21bd7bd174c0428238a6c",
-      "title": "Vault Secrets",
-      "description": "All successful reads to Vault Secrets",
-      "disabled": false,
-      "matching_type": "AND",
-      "stream_rules": [
-        {
-          "type": "PRESENCE",
-          "field": "vault_mount",
-          "value": "",
-          "inverted": false,
-          "description": ""
-        },
-        {
-          "type": "EXACT",
-          "field": "vault_type",
-          "value": "response",
-          "inverted": false,
-          "description": ""
-        },
-        {
-          "type": "EXACT",
-          "field": "vault_request_operation",
-          "value": "read",
-          "inverted": true,
-          "description": ""
-        }
-      ],
-      "outputs": [],
-      "default_stream": false
-    },
-    {
-      "id": "58c21dc1bd174c0428238c77",
-      "title": "Vault Secret Access",
-      "description": "Successful read operations from Vault",
-      "disabled": false,
-      "matching_type": "AND",
-      "stream_rules": [
-        {
-          "type": "PRESENCE",
-          "field": "vault_mount",
-          "value": "",
-          "inverted": true,
-          "description": ""
-        },
-        {
-          "type": "EXACT",
-          "field": "vault_type",
-          "value": "response",
-          "inverted": false,
-          "description": ""
-        },
-        {
-          "type": "EXACT",
-          "field": "vault_request_operation",
-          "value": "read",
-          "inverted": false,
-          "description": ""
-        }
-      ],
-      "outputs": [],
-      "default_stream": false
-    },
-    {
-      "id": "000000000000000000000001",
-      "title": "All messages",
-      "description": "Stream containing all messages",
-      "disabled": false,
-      "matching_type": "AND",
-      "stream_rules": [],
-      "outputs": [],
-      "default_stream": true
-    },
-    {
-      "id": "58bccec5bd174c66238c34ed",
-      "title": "Vault Authentications",
-      "description": "All Vault authentications",
-      "disabled": false,
-      "matching_type": "OR",
-      "stream_rules": [
-        {
-          "type": "EXACT",
-          "field": "vault_type",
-          "value": "response",
-          "inverted": false,
-          "description": ""
-        },
-        {
-          "type": "PRESENCE",
-          "field": "vault_authentication_backend",
-          "value": "",
-          "inverted": false,
-          "description": ""
-        },
-        {
-          "type": "EXACT",
-          "field": "request_path",
-          "value": "token/lookup-self",
-          "inverted": true,
-          "description": "Excluding requests to token/lookup-self. The lookup-self endpoint is used to retrieve information about the current token, and doesn't create/renew anything."
-        }
-      ],
-      "outputs": [],
-      "default_stream": false
-    }
-  ],
-  "outputs": [],
-  "dashboards": [],
-  "grok_patterns": []
+  ]
 }
